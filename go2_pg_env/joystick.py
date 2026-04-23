@@ -566,7 +566,14 @@ class Joystick(go2_base.Go2Env):
         3. increase the probability of non-zero `vy` and `yaw_rate` commands
         """
         del current_command
-        return self._cmd_min, self._cmd_max, self._cmd_b
+
+        alpha = 0.4;
+
+        cmd_min = (1.0 - alpha) * self._cmd_min + alpha * self._student_stage2_goal_min
+        cmd_max = (1.0 - alpha) * self._cmd_max + alpha * self._student_stage2_goal_max
+        cmd_b = (1.0 - alpha) * self._cmd_b + alpha * self._student_stage2_goal_b
+
+        return cmd_min, cmd_max, cmd_b
 
     def sample_command(self, rng: jax.Array, current_command: jax.Array) -> jax.Array:
         rng, y_rng, w_rng, z_rng = jax.random.split(rng, 4)
