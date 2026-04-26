@@ -567,7 +567,7 @@ class Joystick(go2_base.Go2Env):
         """
         del current_command
 
-        alpha = 0.4;
+        alpha = 0.25;
 
         cmd_min = (1.0 - alpha) * self._cmd_min + alpha * self._student_stage2_goal_min
         cmd_max = (1.0 - alpha) * self._cmd_max + alpha * self._student_stage2_goal_max
