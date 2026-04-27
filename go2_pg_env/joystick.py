@@ -70,16 +70,16 @@ def default_config() -> config_dict.ConfigDict:
                 tracking_ang_vel=0.5,
                 # Stability terms
                 lin_vel_z=-0.5,
-                ang_vel_xy=-0.05,
-                orientation=-5.0,
+                ang_vel_xy=-0.10,
+                orientation=-8.0,
                 dof_pos_limits=-1.0,
                 pose=0.5,
-                termination=-1.0,
+                termination=-5.0,
                 stand_still=-1.0,
                 # Smoothness / efficiency terms
                 torques=-0.0002,
-                action_rate=-0.01,
-                energy=-0.001,
+                action_rate=-0.015,
+                energy=-0.0015,
                 # Foot-behavior terms
                 feet_clearance=-2.0,
                 feet_height=-0.2,
