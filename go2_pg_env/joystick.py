@@ -567,9 +567,9 @@ class Joystick(go2_base.Go2Env):
         """
         del current_command
 
-        # Cover the public lateral/yaw commands while keeping the curriculum
-        # slightly easier than the full stage_2 goal distribution.
-        alpha = 0.75
+        # In stage_2 we directly train on the student goal distribution so the
+        # policy sees enough pure lateral / yaw commands for public eval.
+        alpha = 1.0
 
         cmd_min = (1.0 - alpha) * self._cmd_min + alpha * self._student_stage2_goal_min
         cmd_max = (1.0 - alpha) * self._cmd_max + alpha * self._student_stage2_goal_max
