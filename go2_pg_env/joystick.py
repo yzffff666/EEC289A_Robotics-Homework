@@ -577,7 +577,45 @@ class Joystick(go2_base.Go2Env):
 
         return cmd_min, cmd_max, cmd_b
 
+    def _sample_student_stage2_command(self, rng: jax.Array, current_command: jax.Array) -> jax.Array:
+        """Sample stage_2 commands from explicit locomotion modes.
+
+        A uniform box with independent Bernoulli masks under-samples the cases
+        that matter most for the video and custom evaluation: backward walking,
+        lateral motion, yaw turns, and combined commands.  This sampler gives
+        each mode direct coverage while still randomizing magnitudes and signs.
+        """
+        del current_command
+
+        rng, mode_rng, mag_rng, sign_rng = jax.random.split(rng, 4)
+        max_abs = jp.maximum(jp.abs(self._student_stage2_goal_min), jp.abs(self._student_stage2_goal_max))
+        min_abs = jp.array([0.25, 0.25, 0.25]) * max_abs
+        magnitudes = jax.random.uniform(mag_rng, shape=(3,), minval=min_abs, maxval=max_abs)
+
+        signs = jp.where(jax.random.bernoulli(sign_rng, 0.5, shape=(3,)), 1.0, -1.0)
+        vx, vy, yaw = magnitudes
+        sx, sy, syaw = signs
+
+        candidates = jp.stack(
+            [
+                jp.array([0.0, 0.0, 0.0]),          # stand
+                jp.array([vx, 0.0, 0.0]),           # forward
+                jp.array([-vx, 0.0, 0.0]),          # backward
+                jp.array([0.0, sy * vy, 0.0]),      # lateral
+                jp.array([0.0, 0.0, syaw * yaw]),   # yaw
+                jp.array([0.0, sy * vy, syaw * yaw]),
+                jp.array([sx * vx, 0.0, syaw * yaw]),
+                jp.array([sx * vx, sy * vy, syaw * yaw]),
+            ]
+        )
+        mode = jax.random.randint(mode_rng, shape=(), minval=0, maxval=candidates.shape[0])
+        command = candidates[mode]
+        return jp.clip(command, self._student_stage2_goal_min, self._student_stage2_goal_max)
+
     def sample_command(self, rng: jax.Array, current_command: jax.Array) -> jax.Array:
+        if self._command_stage_name == "stage_2":
+            return self._sample_student_stage2_command(rng, current_command)
+
         rng, y_rng, w_rng, z_rng = jax.random.split(rng, 4)
         cmd_min, cmd_max, cmd_keep_prob = self._command_sampling_profile(current_command)
         candidate = jax.random.uniform(y_rng, shape=(3,), minval=cmd_min, maxval=cmd_max)
