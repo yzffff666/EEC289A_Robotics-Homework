@@ -587,25 +587,34 @@ class Joystick(go2_base.Go2Env):
         """
         del current_command
 
-        rng, mode_rng, mag_rng, sign_rng = jax.random.split(rng, 4)
+        rng, mode_rng, mag_rng, back_mag_rng, sign_rng = jax.random.split(rng, 5)
         max_abs = jp.maximum(jp.abs(self._student_stage2_goal_min), jp.abs(self._student_stage2_goal_max))
         min_abs = jp.array([0.25, 0.25, 0.25]) * max_abs
         magnitudes = jax.random.uniform(mag_rng, shape=(3,), minval=min_abs, maxval=max_abs)
+        backward_vx = jax.random.uniform(back_mag_rng, shape=(), minval=0.20 * max_abs[0], maxval=0.60 * max_abs[0])
 
         signs = jp.where(jax.random.bernoulli(sign_rng, 0.5, shape=(3,)), 1.0, -1.0)
         vx, vy, yaw = magnitudes
         sx, sy, syaw = signs
 
+        backward = jp.array([-backward_vx, 0.0, 0.0])
         candidates = jp.stack(
             [
                 jp.array([0.0, 0.0, 0.0]),          # stand
                 jp.array([vx, 0.0, 0.0]),           # forward
                 jp.array([-vx, 0.0, 0.0]),          # backward
+                backward,
+                backward,
+                backward,
+                backward,
                 jp.array([0.0, sy * vy, 0.0]),      # lateral
                 jp.array([0.0, 0.0, syaw * yaw]),   # yaw
                 jp.array([0.0, sy * vy, syaw * yaw]),
                 jp.array([sx * vx, 0.0, syaw * yaw]),
                 jp.array([sx * vx, sy * vy, syaw * yaw]),
+                jp.array([-backward_vx, sy * vy, 0.0]),
+                jp.array([-backward_vx, 0.0, syaw * yaw]),
+                jp.array([-backward_vx, sy * vy, syaw * yaw]),
             ]
         )
         mode = jax.random.randint(mode_rng, shape=(), minval=0, maxval=candidates.shape[0])

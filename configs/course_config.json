@@ -102,9 +102,9 @@
       ]
     },
     "reward_scales": {
-      "tracking_lin_vel": 1.5,
+      "tracking_lin_vel": 1.8,
       "tracking_ang_vel": 1.0,
-      "pose": 0.35,
+      "pose": 0.25,
       "action_rate": -0.025,
       "energy": -0.002
     },
@@ -124,7 +124,7 @@
         0.0
       ],
       [
-        -0.5,
+        -0.3,
         0.0,
         0.0
       ],
