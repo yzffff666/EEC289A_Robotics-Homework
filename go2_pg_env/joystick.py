@@ -69,6 +69,7 @@ def default_config() -> config_dict.ConfigDict:
                 tracking_lin_vel=1.0,
                 tracking_ang_vel=0.5,
                 tracking_backward_lin_vel=0.0,
+                backward_progress=0.0,
                 # Stability terms
                 lin_vel_z=-0.5,
                 ang_vel_xy=-0.10,
@@ -408,6 +409,7 @@ class Joystick(go2_base.Go2Env):
             "tracking_backward_lin_vel": self._reward_tracking_backward_lin_vel(
                 info["command"], self.get_local_linvel(data)
             ),
+            "backward_progress": self._reward_backward_progress(info["command"], self.get_local_linvel(data)),
             "lin_vel_z": self._cost_lin_vel_z(self.get_global_linvel(data)),
             "ang_vel_xy": self._cost_ang_vel_xy(self.get_global_angvel(data)),
             "orientation": self._cost_orientation(self.get_upvector(data)),
@@ -435,11 +437,17 @@ class Joystick(go2_base.Go2Env):
         return jp.exp(-ang_vel_error / self._config.reward_config.tracking_sigma)
 
     def _reward_tracking_backward_lin_vel(self, commands: jax.Array, local_vel: jax.Array) -> jax.Array:
-        """Extra signal for backward walking, where generic tracking can be too weak."""
+        """Sharp backward-only tracking so standing still is no longer attractive."""
         backward_cmd = commands[0] < -0.05
         vx_error = jp.square(commands[0] - local_vel[0])
-        wrong_direction_penalty = jp.square(jp.maximum(local_vel[0], 0.0))
-        return backward_cmd * jp.exp(-(vx_error + wrong_direction_penalty) / self._config.reward_config.tracking_sigma)
+        wrong_direction_penalty = 4.0 * jp.square(jp.maximum(local_vel[0], 0.0))
+        return backward_cmd * jp.exp(-(vx_error + wrong_direction_penalty) / 0.04)
+
+    def _reward_backward_progress(self, commands: jax.Array, local_vel: jax.Array) -> jax.Array:
+        backward_cmd = commands[0] < -0.05
+        target_speed = jp.maximum(-commands[0], 0.05)
+        backward_speed_fraction = jp.clip(-local_vel[0] / target_speed, 0.0, 1.0)
+        return backward_cmd * backward_speed_fraction
 
     # --- Stability costs ---------------------------------------------------
 
