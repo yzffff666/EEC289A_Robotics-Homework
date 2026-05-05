@@ -68,6 +68,7 @@ def default_config() -> config_dict.ConfigDict:
                 # Task terms
                 tracking_lin_vel=1.0,
                 tracking_ang_vel=0.5,
+                tracking_backward_lin_vel=0.0,
                 # Stability terms
                 lin_vel_z=-0.5,
                 ang_vel_xy=-0.10,
@@ -404,6 +405,9 @@ class Joystick(go2_base.Go2Env):
         return {
             "tracking_lin_vel": self._reward_tracking_lin_vel(info["command"], self.get_local_linvel(data)),
             "tracking_ang_vel": self._reward_tracking_ang_vel(info["command"], self.get_gyro(data)),
+            "tracking_backward_lin_vel": self._reward_tracking_backward_lin_vel(
+                info["command"], self.get_local_linvel(data)
+            ),
             "lin_vel_z": self._cost_lin_vel_z(self.get_global_linvel(data)),
             "ang_vel_xy": self._cost_ang_vel_xy(self.get_global_angvel(data)),
             "orientation": self._cost_orientation(self.get_upvector(data)),
@@ -429,6 +433,13 @@ class Joystick(go2_base.Go2Env):
     def _reward_tracking_ang_vel(self, commands: jax.Array, ang_vel: jax.Array) -> jax.Array:
         ang_vel_error = jp.square(commands[2] - ang_vel[2])
         return jp.exp(-ang_vel_error / self._config.reward_config.tracking_sigma)
+
+    def _reward_tracking_backward_lin_vel(self, commands: jax.Array, local_vel: jax.Array) -> jax.Array:
+        """Extra signal for backward walking, where generic tracking can be too weak."""
+        backward_cmd = commands[0] < -0.05
+        vx_error = jp.square(commands[0] - local_vel[0])
+        wrong_direction_penalty = jp.square(jp.maximum(local_vel[0], 0.0))
+        return backward_cmd * jp.exp(-(vx_error + wrong_direction_penalty) / self._config.reward_config.tracking_sigma)
 
     # --- Stability costs ---------------------------------------------------
 
@@ -587,17 +598,26 @@ class Joystick(go2_base.Go2Env):
         """
         del current_command
 
-        rng, mode_rng, mag_rng, back_mag_rng, sign_rng = jax.random.split(rng, 5)
+        rng, mode_rng, mag_rng, back_mag_rng, sign_rng, back_level_rng = jax.random.split(rng, 6)
         max_abs = jp.maximum(jp.abs(self._student_stage2_goal_min), jp.abs(self._student_stage2_goal_max))
         min_abs = jp.array([0.25, 0.25, 0.25]) * max_abs
         magnitudes = jax.random.uniform(mag_rng, shape=(3,), minval=min_abs, maxval=max_abs)
-        backward_vx = jax.random.uniform(back_mag_rng, shape=(), minval=0.20 * max_abs[0], maxval=0.60 * max_abs[0])
+        backward_levels = jp.array([0.20, 0.35, 0.50, 0.60]) * max_abs[0]
+        backward_level = jax.random.randint(back_level_rng, shape=(), minval=0, maxval=backward_levels.shape[0])
+        backward_vx = jp.where(
+            jax.random.bernoulli(back_mag_rng, 0.6),
+            backward_levels[backward_level],
+            jax.random.uniform(back_mag_rng, shape=(), minval=0.20 * max_abs[0], maxval=0.70 * max_abs[0]),
+        )
 
         signs = jp.where(jax.random.bernoulli(sign_rng, 0.5, shape=(3,)), 1.0, -1.0)
         vx, vy, yaw = magnitudes
         sx, sy, syaw = signs
 
         backward = jp.array([-backward_vx, 0.0, 0.0])
+        slow_backward = jp.array([-0.20 * max_abs[0], 0.0, 0.0])
+        medium_backward = jp.array([-0.40 * max_abs[0], 0.0, 0.0])
+        fast_backward = jp.array([-0.60 * max_abs[0], 0.0, 0.0])
         candidates = jp.stack(
             [
                 jp.array([0.0, 0.0, 0.0]),          # stand
@@ -607,6 +627,12 @@ class Joystick(go2_base.Go2Env):
                 backward,
                 backward,
                 backward,
+                slow_backward,
+                medium_backward,
+                fast_backward,
+                slow_backward,
+                medium_backward,
+                fast_backward,
                 jp.array([0.0, sy * vy, 0.0]),      # lateral
                 jp.array([0.0, 0.0, syaw * yaw]),   # yaw
                 jp.array([0.0, sy * vy, syaw * yaw]),
